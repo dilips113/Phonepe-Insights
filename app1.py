@@ -20,7 +20,7 @@ st.set_page_config(
 # ========================
 # DATABASE CONNECTION
 # ========================
-@st.cache_resource
+@st.cache_resource                        #cache the database engine to avoid reconnecting on every function call
 def get_database_engine():
     """Create database connection with error handling."""
     try:
@@ -33,7 +33,7 @@ def get_database_engine():
 # ========================
 # DATA LOADING FUNCTIONS
 # ========================
-@st.cache_data
+@st.cache_data                         #cache the geojson data to avoid reloading on every function call
 def load_geojson_data():
     """Load and process GeoJSON data with Odisha fix."""
     try:
@@ -41,11 +41,11 @@ def load_geojson_data():
             geojson_data = json.load(f)
         
         # Process state names and fix Odisha mapping
-        for feature in geojson_data["features"]:
+        for feature in geojson_data["features"]:                                    #ITERATE THROUGH EACH FEATURE
             if "properties" not in feature:
-                feature["properties"] = {}
+                feature["properties"] = {}                                          # Ensure properties key exists empty
             
-            state_name = feature["properties"].get("NAME_1", "")
+            state_name = feature["properties"].get("NAME_1", "")                    # Get state name
             if isinstance(state_name, str):
                 # Standardize state name
                 standardized_name = state_name.lower().strip()
@@ -281,6 +281,9 @@ if page == "📊 Dashboard":
 # ========================
 # CASE STUDIES PAGE
 # ========================
+# ========================
+# CASE STUDIES PAGE
+# ========================
 elif page == "🔍 Case Studies":
     st.title("🔍 Business Case Studies")
     
@@ -292,299 +295,272 @@ elif page == "🔍 Case Studies":
         "👥 User Growth Analysis"
     ])
 
-    # Case Study 1: Transaction Dynamics
+    # ------------------------------------------------------------------
+    # CASE STUDY 1: TRANSACTION DYNAMICS
+    # ------------------------------------------------------------------
     if case_study == "💳 Transaction Dynamics Analysis":
         st.header("💳 Transaction Dynamics Analysis")
-        st.markdown("**Objective**: Analyze transaction patterns across states, quarters, and payment types for strategic decision making.")
+        st.markdown("**Objective:** Explore how transaction count, amount, and type vary across time and states for strategic planning.")
         
-        # Time Period Selection
         col1, col2 = st.columns(2)
         with col1:
-            years = sorted(data["agg_transaction"]["Years"].unique()) if not data["agg_transaction"].empty else [2023]
+            years = sorted(data["agg_transaction"]["Years"].unique())
             selected_year = st.selectbox("Select Year", years, key="td_year")
         with col2:
-            quarters = sorted(data["agg_transaction"][data["agg_transaction"]["Years"] == selected_year]["Quarter"].unique()) if not data["agg_transaction"].empty else [1]
+            quarters = sorted(data["agg_transaction"][data["agg_transaction"]["Years"] == selected_year]["Quarter"].unique())
             selected_quarter = st.selectbox("Select Quarter", quarters, key="td_quarter")
-
-        if not data["agg_transaction"].empty:
-            filtered_data = data["agg_transaction"][
-                (data["agg_transaction"]["Years"] == selected_year) & 
-                (data["agg_transaction"]["Quarter"] == selected_quarter)
-            ]
-            
-            if not filtered_data.empty:
-                # State-wise Analysis
-                state_summary = filtered_data.groupby("State").agg({
-                    "Transaction_amount": "sum",
-                    "Transaction_count": "sum"
-                }).reset_index()
-                state_summary["Amount_M"] = state_summary["Transaction_amount"] / 1e6
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.subheader("🗺️ State-wise Transaction Heatmap")
-                    fig = create_choropleth_map(
-                        state_summary, 
-                        "Amount_M", 
-                        f"Transactions - {selected_year} Q{selected_quarter}",
-                        "Blues",
-                        "₹M"
-                    )
-                    if fig:
-                        st.plotly_chart(fig, use_container_width=True)
-                
-                with col2:
-                    st.subheader("💰 Top 10 States by Amount")
-                    top_states = state_summary.nlargest(10, "Transaction_amount")
-                    top_states["Amount_B"] = top_states["Transaction_amount"] / 1e9
-                    
-                    fig = create_bar_chart(
-                        top_states, 
-                        "State", 
-                        "Amount_B", 
-                        "Top States by Transaction Amount (₹B)"
-                    )
-                    if fig:
-                        st.plotly_chart(fig, use_container_width=True)
-                
-                # Payment Type Analysis
-                st.subheader("📊 Payment Type Distribution")
-                if "Transaction_type" in filtered_data.columns:
-                    payment_summary = filtered_data.groupby("Transaction_type")["Transaction_count"].sum().nlargest(5).reset_index()
-                    fig = create_pie_chart(
-                        payment_summary, 
-                        "Transaction_count", 
-                        "Transaction_type",
-                        "Transaction Distribution by Payment Type"
-                    )
-                    if fig:
-                        st.plotly_chart(fig, use_container_width=True)
-
-    # Case Study 2: Device Usage & User Engagement
-    elif case_study == "📱 Device Usage & User Engagement":
-        st.header("📱 Device Usage & User Engagement Analysis")
-        st.markdown("**Objective**: Understand user device preferences and engagement patterns to optimize app performance.")
         
-        # Time Period Selection
-        col1, col2 = st.columns(2)
-        with col1:
-            years = sorted(data["agg_user"]["Years"].unique()) if not data["agg_user"].empty else [2023]
-            selected_year = st.selectbox("Select Year", years, key="device_year")
-        with col2:
-            quarters = sorted(data["agg_user"][data["agg_user"]["Years"] == selected_year]["Quarter"].unique()) if not data["agg_user"].empty else [1]
-            selected_quarter = st.selectbox("Select Quarter", quarters, key="device_quarter")
+        filtered = data["agg_transaction"][
+            (data["agg_transaction"]["Years"] == selected_year) & 
+            (data["agg_transaction"]["Quarter"] == selected_quarter)
+        ]
+        if filtered.empty:
+            st.warning("No transaction data for selected period.")
+        else:
+            # 1️⃣ State-wise Heatmap
+            state_summary = filtered.groupby("State", as_index=False)["Transaction_amount"].sum()
+            state_summary["Amount_M"] = state_summary["Transaction_amount"] / 1e6
+            st.subheader("1️⃣ State-wise Transaction Heatmap")
+            fig = create_choropleth_map(state_summary, "Amount_M", f"Transaction Heatmap - {selected_year} Q{selected_quarter}", "Blues", "₹M")
+            st.plotly_chart(fig, use_container_width=True)
 
-        if not data["agg_user"].empty:
-            user_data = data["agg_user"][
-                (data["agg_user"]["Years"] == selected_year) & 
-                (data["agg_user"]["Quarter"] == selected_quarter)
-            ]
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.subheader("📱 Device Brand Distribution")
-                if not user_data.empty and "Brands" in user_data.columns:
-                    brand_summary = user_data.groupby("Brands")["Transaction_count"].sum().nlargest(8).reset_index()
-                    fig = create_pie_chart(
-                        brand_summary, 
-                        "Transaction_count", 
-                        "Brands",
-                        "User Distribution by Device Brand"
-                    )
-                    if fig:
-                        st.plotly_chart(fig, use_container_width=True)
-            
-            with col2:
-                st.subheader("🏙️ Top Districts by App Opens")
-                if not data["map_user"].empty:
-                    map_user_filtered = data["map_user"][
-                        (data["map_user"]["Years"] == selected_year) & 
-                        (data["map_user"]["Quarter"] == selected_quarter)
-                    ]
-                    if not map_user_filtered.empty and "AppOpens" in map_user_filtered.columns:
-                        district_opens = map_user_filtered.groupby("District")["AppOpens"].sum().nlargest(10).reset_index()
-                        fig = create_bar_chart(
-                            district_opens, 
-                            "District", 
-                            "AppOpens",
-                            "Top Districts by App Opens"
-                        )
-                        if fig:
-                            st.plotly_chart(fig, use_container_width=True)
+            # 2️⃣ Top 10 States
+            st.subheader("2️⃣ Top 10 States by Transaction Amount")
+            top10 = state_summary.nlargest(10, "Transaction_amount")
+            fig = create_bar_chart(top10, "State", "Amount_M", "Top 10 States (₹M)")
+            st.plotly_chart(fig, use_container_width=True)
 
-    # Case Study 3: Insurance Market Analysis  
+            # 3️⃣ Payment Type Distribution
+            st.subheader("3️⃣ Payment Type Distribution")
+            pay_type = filtered.groupby("Transaction_type")["Transaction_count"].sum().reset_index()
+            fig = create_pie_chart(pay_type, "Transaction_count", "Transaction_type", "Transaction Count by Type")
+            st.plotly_chart(fig, use_container_width=True)
+
+            # 4️⃣ Yearly Growth Trend
+            st.subheader("4️⃣ Yearly Growth Trend")
+            growth = data["agg_transaction"].groupby("Years")["Transaction_amount"].sum().reset_index()
+            fig = px.line(growth, x="Years", y="Transaction_amount", title="Yearly Transaction Growth", markers=True)
+            st.plotly_chart(fig, use_container_width=True)
+
+            # 5️⃣ Average Transaction Value
+            st.subheader("5️⃣ Average Transaction Value per Transaction")
+            avg_val = filtered.groupby("State").apply(lambda x: (x["Transaction_amount"].sum() / x["Transaction_count"].sum())).reset_index(name="Avg_Value")
+            fig = create_bar_chart(avg_val.nlargest(10, "Avg_Value"), "State", "Avg_Value", "Top 10 Avg Transaction Value (₹)")
+            st.plotly_chart(fig, use_container_width=True)
+    # ------------------------------------------------------------------
+    # CASE STUDY 2: DEVICE USAGE & USER ENGAGEMENT (SIMPLE & CONSISTENT)
+    # ------------------------------------------------------------------
+        # ------------------------------------------------------------------
+    # CASE STUDY 2: DEVICE USAGE & USER ENGAGEMENT (NO REGISTERED_USERS)
+    # ------------------------------------------------------------------
+    elif case_study == "📱 Device Usage & User Engagement":
+        st.header("📱 Device Usage & User Engagement")
+        st.markdown("**Objective:** Analyze user engagement based on device brands and app usage patterns across regions.**")
+
+        # Dropdown filters for Year and Quarter
+        years = sorted(data["agg_user"]["Years"].unique())
+        selected_year = st.selectbox("Select Year", years, key="du_year")
+
+        quarters = sorted(data["agg_user"][data["agg_user"]["Years"] == selected_year]["Quarter"].unique())
+        selected_quarter = st.selectbox("Select Quarter", quarters, key="du_quarter")
+
+        # Filter data for selected year and quarter
+        user_df = data["agg_user"][
+            (data["agg_user"]["Years"] == selected_year) & 
+            (data["agg_user"]["Quarter"] == selected_quarter)
+        ]
+        map_df = data["map_user"][
+            (data["map_user"]["Years"] == selected_year) & 
+            (data["map_user"]["Quarter"] == selected_quarter)
+        ]
+
+        # Check if data is available
+        if user_df.empty or map_df.empty:
+            st.warning("No user data available for the selected period.")
+        else:
+            # 1️⃣ Top 10 Device Brands by Count
+            st.subheader("📱 Top 10 Device Brands by Transaction_count")
+            brand_data = (
+                user_df.groupby("Brands")["Transaction_count"].sum()
+                .reset_index()
+                .sort_values(by="Transaction_count", ascending=False)
+                .head(10)
+            )
+            fig1 = px.bar(
+                brand_data,
+                x="Brands",
+                y="Transaction_count",
+                text_auto=True,
+                color="Brands",
+                title=f"Top 10 Device Brands - {selected_year} Q{selected_quarter}"
+            )
+            st.plotly_chart(fig1, use_container_width=True)
+
+            # 2️⃣ Top 10 States by App Opens
+            st.subheader("🌍 Top 10 States by App Opens")
+            state_usage = (
+                map_df.groupby("State")["AppOpens"].sum()
+                .reset_index()
+                .sort_values(by="AppOpens", ascending=False)
+                .head(10)
+            )
+            fig2 = px.bar(
+                state_usage,
+                x="State",
+                y="AppOpens",
+                text_auto=True,
+                color="State",
+                title=f"Top 10 States by App Opens - {selected_year} Q{selected_quarter}"
+            )
+            st.plotly_chart(fig2, use_container_width=True)
+            
+            # 3️⃣ Pie Chart: Share of Device Usage by State
+            st.subheader("🥧 Share of Device Usage by State")
+            state_device_share = (
+                user_df.groupby("State")["Transaction_count"]
+                .sum()
+                .reset_index()
+                .sort_values(by="Transaction_count", ascending=False)
+                .head(10)
+            )
+            fig3 = px.pie(
+                state_device_share,
+                values="Transaction_count",
+                names="State",
+                title=f"Top 10 States by Share of Total Device Usage - {selected_year} Q{selected_quarter}",
+                hole=0.3,
+                color_discrete_sequence=px.colors.qualitative.Set3
+            )
+            fig3.update_traces(textinfo='percent+label', pull=[0.05]*len(state_device_share))
+            st.plotly_chart(fig3, use_container_width=True)
+
+    # ------------------------------------------------------------------
+    # CASE STUDY 3: INSURANCE MARKET ANALYSIS
+    # ------------------------------------------------------------------
     elif case_study == "🛡️ Insurance Market Analysis":
         st.header("🛡️ Insurance Market Analysis")
-        st.markdown("**Objective**: Analyze insurance transaction growth and identify market expansion opportunities.")
+        st.markdown("**Objective:** Track the growth and penetration of insurance transactions across India.")
         
-        # Time Period Selection
-        col1, col2 = st.columns(2)
-        with col1:
-            years = sorted(data["agg_insurance"]["Years"].unique()) if not data["agg_insurance"].empty else [2023]
-            selected_year = st.selectbox("Select Year", years, key="ins_year")
-        with col2:
-            quarters = sorted(data["agg_insurance"][data["agg_insurance"]["Years"] == selected_year]["Quarter"].unique()) if not data["agg_insurance"].empty else [1]
-            selected_quarter = st.selectbox("Select Quarter", quarters, key="ins_quarter")
+        years = sorted(data["agg_insurance"]["Years"].unique())
+        year = st.selectbox("Select Year", years, key="ins_year")
+        quarters = sorted(data["agg_insurance"][data["agg_insurance"]["Years"] == year]["Quarter"].unique())
+        quarter = st.selectbox("Select Quarter", quarters, key="ins_quarter")
+        
+        ins = data["agg_insurance"][(data["agg_insurance"]["Years"] == year) & (data["agg_insurance"]["Quarter"] == quarter)]
+        if ins.empty:
+            st.warning("No insurance data available.")
+        else:
+            # 1️⃣ Heatmap
+            state_ins = ins.groupby("State", as_index=False)["Insurance_amount"].sum()
+            state_ins["Amount_M"] = state_ins["Insurance_amount"] / 1e6
+            fig = create_choropleth_map(state_ins, "Amount_M", f"Insurance - {year} Q{quarter}", "Oranges", "₹M")
+            st.plotly_chart(fig, use_container_width=True)
 
-        if not data["agg_insurance"].empty:
-            insurance_data = data["agg_insurance"][
-                (data["agg_insurance"]["Years"] == selected_year) & 
-                (data["agg_insurance"]["Quarter"] == selected_quarter)
-            ]
-            
-            if not insurance_data.empty:
-                insurance_summary = insurance_data.groupby("State").agg({
-                    "Insurance_amount": "sum",
-                    "Insurance_count": "sum"
-                }).reset_index()
-                insurance_summary["Amount_K"] = insurance_summary["Insurance_amount"] / 1e3
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.subheader("🗺️ Insurance Coverage Heatmap")
-                    fig = create_choropleth_map(
-                        insurance_summary, 
-                        "Amount_K", 
-                        f"Insurance Amount - {selected_year} Q{selected_quarter}",
-                        "Oranges",
-                        "₹K"
-                    )
-                    if fig:
-                        st.plotly_chart(fig, use_container_width=True)
-                
-                with col2:
-                    st.subheader("📈 Quarterly Growth Trend")
-                    yearly_data = data["agg_insurance"][data["agg_insurance"]["Years"] == selected_year]
-                    if not yearly_data.empty:
-                        growth_trend = yearly_data.groupby("Quarter")["Insurance_amount"].sum().reset_index()
-                        fig = px.line(
-                            growth_trend, 
-                            x="Quarter", 
-                            y="Insurance_amount",
-                            title="Insurance Growth by Quarter",
-                            markers=True
-                        )
-                        fig.update_layout(height=400, yaxis=dict(tickformat=".2e"))
-                        st.plotly_chart(fig, use_container_width=True)
+            # 2️⃣ Top 10 States
+            top10 = state_ins.nlargest(10, "Insurance_amount")
+            fig = create_bar_chart(top10, "State", "Amount_M", "Top States by Insurance (₹M)")
+            st.plotly_chart(fig, use_container_width=True)
 
-    # Case Study 4: Market Expansion Strategy
+            # 3️⃣ Quarterly Growth
+            trend = data["agg_insurance"][data["agg_insurance"]["Years"] == year].groupby("Quarter")["Insurance_amount"].sum().reset_index()
+            fig = px.line(trend, x="Quarter", y="Insurance_amount", title="Quarterly Insurance Growth", markers=True)
+            st.plotly_chart(fig, use_container_width=True)
+
+            # 4️⃣ Average Insurance per Policy
+            ins["Avg_Policy_Value"] = ins["Insurance_amount"] / (ins["Insurance_count"] + 1)
+            avg_policy = ins.groupby("State")["Avg_Policy_Value"].mean().nlargest(10).reset_index()
+            fig = create_bar_chart(avg_policy, "State", "Avg_Policy_Value", "Average Policy Value by State")
+            st.plotly_chart(fig, use_container_width=True)
+
+            # 5️⃣ Year-on-Year Comparison
+            yearly = data["agg_insurance"].groupby("Years")["Insurance_amount"].sum().reset_index()
+            fig = px.line(yearly, x="Years", y="Insurance_amount", title="Year-on-Year Insurance Growth", markers=True)
+            st.plotly_chart(fig, use_container_width=True)
+
+    # ------------------------------------------------------------------
+    # CASE STUDY 4: MARKET EXPANSION STRATEGY
+    # ------------------------------------------------------------------
     elif case_study == "🎯 Market Expansion Strategy":
-        st.header("🎯 Market Expansion Strategy Analysis")
-        st.markdown("**Objective**: Identify high-potential regions and growth opportunities for market expansion.")
+        st.header("🎯 Market Expansion Strategy")
+        st.markdown("**Objective:** Identify states with highest market potential based on transaction and growth metrics.")
         
-        # Time Period Selection
-        col1, col2 = st.columns(2)
-        with col1:
-            years = sorted(data["map_transaction"]["Years"].unique()) if not data["map_transaction"].empty else [2023]
-            selected_year = st.selectbox("Select Year", years, key="exp_year")
-        with col2:
-            quarters = sorted(data["map_transaction"][data["map_transaction"]["Years"] == selected_year]["Quarter"].unique()) if not data["map_transaction"].empty else [1]
-            selected_quarter = st.selectbox("Select Quarter", quarters, key="exp_quarter")
+        years = sorted(data["map_transaction"]["Years"].unique())
+        year = st.selectbox("Select Year", years, key="exp_year")
+        quarters = sorted(data["map_transaction"][data["map_transaction"]["Years"] == year]["Quarter"].unique())
+        quarter = st.selectbox("Select Quarter", quarters, key="exp_quarter")
+        
+        exp = data["map_transaction"][(data["map_transaction"]["Years"] == year) & (data["map_transaction"]["Quarter"] == quarter)]
+        if exp.empty:
+            st.warning("No transaction mapping data available.")
+        else:
+            exp_summary = exp.groupby("State", as_index=False).agg({"Transaction_amount": "sum", "Transaction_count": "sum"})
+            exp_summary["Amount_M"] = exp_summary["Transaction_amount"] / 1e6
 
-        if not data["map_transaction"].empty:
-            expansion_data = data["map_transaction"][
-                (data["map_transaction"]["Years"] == selected_year) & 
-                (data["map_transaction"]["Quarter"] == selected_quarter)
-            ]
-            
-            if not expansion_data.empty:
-                expansion_summary = expansion_data.groupby("State").agg({
-                    "Transaction_amount": "sum",
-                    "Transaction_count": "sum"
-                }).reset_index()
-                expansion_summary["Amount_M"] = expansion_summary["Transaction_amount"] / 1e6
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.subheader("🗺️ Market Penetration Heatmap")
-                    fig = create_choropleth_map(
-                        expansion_summary, 
-                        "Amount_M", 
-                        f"Market Penetration - {selected_year} Q{selected_quarter}",
-                        "Reds",
-                        "₹M"
-                    )
-                    if fig:
-                        st.plotly_chart(fig, use_container_width=True)
-                
-                with col2:
-                    st.subheader("📊 Growth Opportunity Analysis")
-                    # Calculate growth potential based on transaction density
-                    expansion_summary["Growth_Score"] = (
-                        expansion_summary["Transaction_amount"] / expansion_summary["Transaction_count"]
-                    ).fillna(0)
-                    
-                    top_growth = expansion_summary.nlargest(10, "Growth_Score")
-                    fig = create_bar_chart(
-                        top_growth, 
-                        "State", 
-                        "Growth_Score",
-                        "States with Highest Growth Potential"
-                    )
-                    if fig:
-                        st.plotly_chart(fig, use_container_width=True)
+            # 1️⃣ Heatmap
+            fig = create_choropleth_map(exp_summary, "Amount_M", f"Market Penetration - {year} Q{quarter}", "Reds", "₹M")
+            st.plotly_chart(fig, use_container_width=True)
 
-    # Case Study 5: User Growth Analysis
+            # 2️⃣ Growth Potential
+            exp_summary["Growth_Score"] = (exp_summary["Transaction_amount"] / exp_summary["Transaction_count"]).fillna(0)
+            fig = create_bar_chart(exp_summary.nlargest(10, "Growth_Score"), "State", "Growth_Score", "Top 10 Growth Potential States")
+            st.plotly_chart(fig, use_container_width=True)
+
+            # 3️⃣ High-Density States
+            high_density = exp_summary.nlargest(10, "Transaction_count")
+            fig = create_bar_chart(high_density, "State", "Transaction_count", "Top States by Transaction Density")
+            st.plotly_chart(fig, use_container_width=True)
+
+            # 4️⃣ Yearly Volume Trend
+            trend = data["map_transaction"].groupby("Years")["Transaction_amount"].sum().reset_index()
+            fig = px.line(trend, x="Years", y="Transaction_amount", title="Yearly Market Volume Trend", markers=True)
+            st.plotly_chart(fig, use_container_width=True)
+
+            # 5️⃣ Correlation Scatter
+            fig = px.scatter(exp_summary, x="Transaction_count", y="Transaction_amount", text="State", title="Correlation: Count vs Amount")
+            st.plotly_chart(fig, use_container_width=True)
+
+    # ------------------------------------------------------------------
+    # CASE STUDY 5: USER GROWTH ANALYSIS
+    # ------------------------------------------------------------------
     elif case_study == "👥 User Growth Analysis":
         st.header("👥 User Growth Analysis")
-        st.markdown("**Objective**: Analyze user registration patterns and engagement metrics for growth strategy.")
+        st.markdown("**Objective:** Explore how user registration and engagement evolve across states and quarters.")
         
-        # Time Period Selection
-        col1, col2 = st.columns(2)
-        with col1:
-            years = sorted(data["map_user"]["Years"].unique()) if not data["map_user"].empty else [2023]
-            selected_year = st.selectbox("Select Year", years, key="user_year")
-        with col2:
-            quarters = sorted(data["map_user"][data["map_user"]["Years"] == selected_year]["Quarter"].unique()) if not data["map_user"].empty else [1]
-            selected_quarter = st.selectbox("Select Quarter", quarters, key="user_quarter")
+        years = sorted(data["map_user"]["Years"].unique())
+        year = st.selectbox("Select Year", years, key="usr_year")
+        quarters = sorted(data["map_user"][data["map_user"]["Years"] == year]["Quarter"].unique())
+        quarter = st.selectbox("Select Quarter", quarters, key="usr_quarter")
+        
+        user = data["map_user"][(data["map_user"]["Years"] == year) & (data["map_user"]["Quarter"] == quarter)]
+        if user.empty:
+            st.warning("No user data available.")
+        else:
+            user_sum = user.groupby("State", as_index=False).agg({"RegisteredUsers": "sum", "AppOpens": "sum"})
+            user_sum["Users_K"] = user_sum["RegisteredUsers"] / 1e3
 
-        if not data["map_user"].empty:
-            user_growth_data = data["map_user"][
-                (data["map_user"]["Years"] == selected_year) & 
-                (data["map_user"]["Quarter"] == selected_quarter)
-            ]
-            
-            if not user_growth_data.empty:
-                user_summary = user_growth_data.groupby("State").agg({
-                    "RegisteredUsers": "sum",
-                    "AppOpens": "sum"
-                }).reset_index()
-                user_summary["Users_K"] = user_summary["RegisteredUsers"] / 1e3
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.subheader("👥 User Distribution Heatmap") 
-                    fig = create_choropleth_map(
-                        user_summary, 
-                        "Users_K", 
-                        f"Registered Users - {selected_year} Q{selected_quarter}",
-                        "Purples",
-                        "K Users"
-                    )
-                    if fig:
-                        st.plotly_chart(fig, use_container_width=True)
-                
-                with col2:
-                    st.subheader("📱 User Engagement Analysis")
-                    # Calculate engagement rate
-                    user_summary["Engagement_Rate"] = (
-                        user_summary["AppOpens"] / user_summary["RegisteredUsers"]
-                    ).fillna(0)
-                    
-                    top_engagement = user_summary.nlargest(10, "Engagement_Rate")
-                    fig = create_bar_chart(
-                        top_engagement, 
-                        "State", 
-                        "Engagement_Rate",
-                        "States with Highest User Engagement"
-                    )
-                    if fig:
-                        st.plotly_chart(fig, use_container_width=True)
+            # 1️⃣ User Distribution Heatmap
+            fig = create_choropleth_map(user_sum, "Users_K", f"Registered Users - {year} Q{quarter}", "Purples", "K Users")
+            st.plotly_chart(fig, use_container_width=True)
+
+            # 2️⃣ Engagement Rate
+            user_sum["Engagement_Rate"] = user_sum["AppOpens"] / (user_sum["RegisteredUsers"] + 1)
+            top_eng = user_sum.nlargest(10, "Engagement_Rate")
+            fig = create_bar_chart(top_eng, "State", "Engagement_Rate", "Top 10 States by Engagement Rate")
+            st.plotly_chart(fig, use_container_width=True)
+
+            # 3️⃣ Quarterly Growth
+            q_growth = data["map_user"][data["map_user"]["Years"] == year].groupby("Quarter")["RegisteredUsers"].sum().reset_index()
+            fig = px.line(q_growth, x="Quarter", y="RegisteredUsers", title="Quarterly User Growth", markers=True)
+            st.plotly_chart(fig, use_container_width=True)
+
+            # 4️⃣ Top Districts by Users
+            district_users = user.groupby("District")["RegisteredUsers"].sum().nlargest(10).reset_index()
+            fig = create_bar_chart(district_users, "District", "RegisteredUsers", "Top Districts by Registered Users")
+            st.plotly_chart(fig, use_container_width=True)
+
+            # 5️⃣ Correlation Scatter
+            fig = px.scatter(user_sum, x="RegisteredUsers", y="AppOpens", text="State", title="Correlation: App Opens vs Registered Users")
+            st.plotly_chart(fig, use_container_width=True)
 
 # ========================
 # FOOTER
